@@ -1,0 +1,18 @@
+{
+  "name": "booleanmaths-slack-dispatcher",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": ["server", "client"],
+  "scripts": {
+    "dev": "concurrently -n SERVER,CLIENT,WORKER,SCHEDULER -c blue,green,yellow,magenta \"npm run dev -w server\" \"npm run dev -w client\" \"npm run worker -w server\" \"npm run scheduler:worker -w server\"",
+    "seed": "npm run seed -w server",
+    "check:aggregation": "npm run check:aggregation -w server",
+    "enqueue": "npm run enqueue -w server",
+    "verify:429": "npm run verify:429 -w server",
+    "worker": "npm run worker -w server",
+    "scheduler:worker": "npm run scheduler:worker -w server"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0"
+  }
+}
