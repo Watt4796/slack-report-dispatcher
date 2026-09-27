@@ -9,12 +9,14 @@ dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 import { createApp } from './app.js';
 import { connectDB } from './config/db.js';
 import { registerDailyTrigger } from './scheduler/registerDailyTrigger.js';
+import { initNotificationSubscriber } from './events/notificationBroadcaster.js';
 
 const PORT = process.env.PORT || 4000;
 
 async function main() {
   await connectDB();
   await registerDailyTrigger();
+  await initNotificationSubscriber();
 
   const app = createApp();
   app.listen(PORT, () => {

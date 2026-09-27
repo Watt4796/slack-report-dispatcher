@@ -59,20 +59,28 @@ export function ClientSettingsTable({ clients, onUpdated }) {
         <tbody>
           {clients.map((client) => {
             const dirty = draftFor(client) !== (client.slack_webhook_url ?? '');
+            const isSaving = savingId === client._id;
             return (
-              <tr key={client._id}>
-                <td>{client.name}</td>
+              <tr key={client._id} className={dirty ? 'row-dirty' : ''}>
                 <td>
-                  <input
-                    className="webhook-input"
-                    type="text"
-                    value={draftFor(client)}
-                    onChange={(e) => handleChange(client._id, e.target.value)}
-                    placeholder="https://hooks.slack.com/services/..."
-                  />
+                  <div className="client-cell">
+                    <span className="client-avatar">{client.name.slice(0, 2).toUpperCase()}</span>
+                    <span className="client-name-text">{client.name}</span>
+                  </div>
                 </td>
                 <td>
-                  <label className="toggle">
+                  <div className="input-wrap">
+                    <input
+                      className="webhook-input"
+                      type="text"
+                      value={draftFor(client)}
+                      onChange={(e) => handleChange(client._id, e.target.value)}
+                      placeholder="https://hooks.slack.com/services/..."
+                    />
+                  </div>
+                </td>
+                <td>
+                  <label className="toggle" title={client.slack_notifications_enabled ? 'Notifications enabled' : 'Notifications disabled'}>
                     <input
                       type="checkbox"
                       checked={client.slack_notifications_enabled}
@@ -81,13 +89,13 @@ export function ClientSettingsTable({ clients, onUpdated }) {
                     <span className="toggle-track" />
                   </label>
                 </td>
-                <td>
+                <td className="actions-cell">
                   <button
-                    className="btn-secondary"
-                    disabled={!dirty || savingId === client._id}
+                    className={`btn-save ${dirty ? 'btn-save-dirty' : 'btn-save-clean'}`}
+                    disabled={!dirty || isSaving}
                     onClick={() => handleSaveUrl(client)}
                   >
-                    {savingId === client._id ? 'Saving…' : 'Save'}
+                    {isSaving ? 'Saving…' : dirty ? 'Save changes' : 'Saved'}
                   </button>
                 </td>
               </tr>

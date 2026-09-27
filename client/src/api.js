@@ -16,6 +16,22 @@ export const api = {
   getClients: () => request('/api/clients'),
   updateClient: (id, updates) =>
     request(`/api/clients/${id}`, { method: 'PATCH', body: JSON.stringify(updates) }),
-  getNotifications: (limit = 50) => request(`/api/notifications?limit=${limit}`),
+  getNotifications: (limit = 100) => request(`/api/notifications?limit=${limit}`),
+  getNotificationsStream: (onMessage, onError) => {
+    const url = `${BASE_URL}/api/notifications/stream`;
+    const es = new EventSource(url);
+    es.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        onMessage?.(data);
+      } catch (err) {
+        console.error('[SSE] Failed to parse payload:', err);
+      }
+    };
+    if (onError) {
+      es.onerror = onError;
+    }
+    return es;
+  },
   runReportNow: () => request('/api/reports/run-now', { method: 'POST' }),
 };

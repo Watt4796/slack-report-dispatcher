@@ -11,6 +11,7 @@ import { connection } from '../queue/connection.js';
 import { connectDB } from '../config/db.js';
 import NotificationLog from '../models/NotificationLog.js';
 import { buildBlockKitPayload } from './blockKit.js';
+import { publishNotificationEvent } from '../events/notificationBroadcaster.js';
 
 // During development/testing this points at the local mock endpoint from Section 6 of the
 // brief. Unset it (or remove the line from .env) for the real run so the worker posts to
@@ -32,6 +33,7 @@ async function processReport(job) {
       { client_id: report._id, report_date: report.report_date },
       { $inc: { attempts: 1 }, status: 'failed', last_error: networkErr.message }
     );
+    await publishNotificationEvent('report_failed');
     throw networkErr;
   }
 
@@ -50,6 +52,7 @@ async function processReport(job) {
       { client_id: report._id, report_date: report.report_date },
       { $inc: { attempts: 1 }, status: 'failed', last_error: `Slack responded ${response.status}` }
     );
+    await publishNotificationEvent('report_failed');
     throw new Error(`Slack responded ${response.status}`);
   }
 
@@ -57,6 +60,7 @@ async function processReport(job) {
     { client_id: report._id, report_date: report.report_date },
     { status: 'sent', sent_at: new Date(), slack_response_status: response.status }
   );
+  await publishNotificationEvent('report_sent');
 }
 
 // Connect before the worker starts pulling jobs, so processReport's NotificationLog writes

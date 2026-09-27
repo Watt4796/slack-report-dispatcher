@@ -1,6 +1,7 @@
 import { slackReportsQueue } from '../queue/slackReportsQueue.js';
 import NotificationLog from '../models/NotificationLog.js';
 import { buildDailyReports, getPreviousDayRange } from './aggregateDailyReports.js';
+import { publishNotificationEvent } from '../events/notificationBroadcaster.js';
 
 function toISODate(date) {
   return date.toISOString().slice(0, 10); // 'YYYY-MM-DD'
@@ -29,6 +30,10 @@ export async function dispatchDailyReports(referenceDate = new Date()) {
       { $setOnInsert: { status: 'pending' } },
       { upsert: true }
     );
+  }
+
+  if (reports.length > 0) {
+    await publishNotificationEvent('reports_dispatched');
   }
 
   return { reportDate, count: reports.length };
