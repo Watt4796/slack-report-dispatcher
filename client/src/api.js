@@ -34,4 +34,6 @@ export const api = {
     return es;
   },
   runReportNow: () => request('/api/reports/run-now', { method: 'POST' }),
+  clearNotifications: () => request('/api/notifications', { method: 'DELETE' }),
+  retryNotification: (id) => request(`/api/notifications/${id}/retry`, { method: 'POST' }),
 };

@@ -19,15 +19,33 @@ export async function dispatchDailyReports(referenceDate = new Date()) {
   const reportDate = toISODate(start);
 
   for (const report of reports) {
+    const jobId = `${report._id}-${reportDate}`;
+
+    // If this job was previously completed or failed, remove it so a manual/re-triggered run can be processed again
+    const existingJob = await slackReportsQueue.getJob(jobId);
+    if (existingJob) {
+      const state = await existingJob.getState();
+      if (state === 'completed' || state === 'failed') {
+        await existingJob.remove();
+      }
+    }
+
     await slackReportsQueue.add(
       'send-report',
       { ...report, report_date: reportDate },
-      { jobId: `${report._id}-${reportDate}` } // idempotent: re-running for the same day won't double-enqueue
+      { jobId }
     );
 
     await NotificationLog.updateOne(
       { client_id: report._id, report_date: reportDate },
-      { $setOnInsert: { status: 'pending' } },
+      {
+        $set: {
+          status: 'pending',
+          client_name: report.name,
+          last_error: null,
+          attempts: 0,
+        },
+      },
       { upsert: true }
     );
   }

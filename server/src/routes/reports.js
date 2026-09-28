@@ -7,6 +7,15 @@ const router = Router();
 // actual scheduled time. This is the endpoint you'll hit before recording the Loom video.
 router.post('/reports/run-now', async (_req, res) => {
   try {
+    const NotificationLog = (await import('../models/NotificationLog.js')).default;
+    const pendingCount = await NotificationLog.countDocuments({ status: 'pending' });
+    if (pendingCount > 0) {
+      return res.status(409).json({
+        ok: false,
+        error: `A dispatch run is already in progress (${pendingCount} report(s) still sending). Please wait until delivery completes.`,
+      });
+    }
+
     const { reportDate, count } = await dispatchDailyReports();
     res.json({ ok: true, reportDate, enqueued: count });
   } catch (err) {

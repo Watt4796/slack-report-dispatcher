@@ -11,7 +11,7 @@ let heartbeatInterval = null;
 export function formatNotificationLog(log) {
   return {
     id: log._id,
-    client_name: log.client_id?.name ?? 'Unknown client',
+    client_name: log.client_id?.name || log.client_name || 'Unknown client',
     report_date: log.report_date,
     status: log.status,
     attempts: log.attempts,

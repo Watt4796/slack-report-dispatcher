@@ -9,6 +9,7 @@ import mongoose from 'mongoose';
 import { connectDB } from '../config/db.js';
 import Client from '../models/Client.js';
 import DailyStat from '../models/DailyStat.js';
+import NotificationLog from '../models/NotificationLog.js';
 
 const CHANNELS = ['meta_ads', 'google_ads'];
 const DAYS_BACK = 3;
@@ -38,7 +39,11 @@ async function seed() {
 
   const webhookUrls = readWebhookUrls();
 
-  await Promise.all([Client.deleteMany({}), DailyStat.deleteMany({})]);
+  await Promise.all([
+    Client.deleteMany({}),
+    DailyStat.deleteMany({}),
+    NotificationLog.deleteMany({}),
+  ]);
 
   const clients = await Client.insertMany(
     webhookUrls.map((url, i) => ({

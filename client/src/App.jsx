@@ -57,6 +57,8 @@ function App() {
     loadClients();
   }, [loadClients]);
 
+  const [pendingLogsCount, setPendingLogsCount] = useState(0);
+
   const activeClientsCount = clients.filter((c) => c.slack_notifications_enabled).length;
 
   return (
@@ -74,7 +76,6 @@ function App() {
             <div>
               <div className="brand-title-wrap">
                 <h1>Slack Report Dispatcher</h1>
-                <span className="version-tag">Phase 6</span>
               </div>
               <p className="subtitle">Daily marketing attribution &amp; ROAS reports dispatched automatically at 9:00 AM.</p>
             </div>
@@ -82,7 +83,7 @@ function App() {
 
           <div className="header-actions">
             <ThemeToggle theme={theme} onToggle={toggleTheme} />
-            <RunReportButton />
+            <RunReportButton pendingCount={pendingLogsCount} />
           </div>
         </header>
 
@@ -145,7 +146,7 @@ function App() {
               </span>
             </div>
 
-            <NotificationLogsTable />
+            <NotificationLogsTable onPendingCountChange={setPendingLogsCount} />
           </section>
         </main>
       </div>

@@ -31,7 +31,7 @@ async function processReport(job) {
     // (configured on the queue) handle the retry.
     await NotificationLog.updateOne(
       { client_id: report._id, report_date: report.report_date },
-      { $inc: { attempts: 1 }, status: 'failed', last_error: networkErr.message }
+      { $inc: { attempts: 1 }, status: 'failed', last_error: networkErr.message, ...(report.name && { client_name: report.name }) }
     );
     await publishNotificationEvent('report_failed');
     throw networkErr;
@@ -50,7 +50,7 @@ async function processReport(job) {
   if (response.status >= 400) {
     await NotificationLog.updateOne(
       { client_id: report._id, report_date: report.report_date },
-      { $inc: { attempts: 1 }, status: 'failed', last_error: `Slack responded ${response.status}` }
+      { $inc: { attempts: 1 }, status: 'failed', last_error: `Slack responded ${response.status}`, ...(report.name && { client_name: report.name }) }
     );
     await publishNotificationEvent('report_failed');
     throw new Error(`Slack responded ${response.status}`);
@@ -58,7 +58,7 @@ async function processReport(job) {
 
   await NotificationLog.updateOne(
     { client_id: report._id, report_date: report.report_date },
-    { status: 'sent', sent_at: new Date(), slack_response_status: response.status }
+    { status: 'sent', sent_at: new Date(), slack_response_status: response.status, ...(report.name && { client_name: report.name }) }
   );
   await publishNotificationEvent('report_sent');
 }

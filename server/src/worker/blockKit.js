@@ -8,17 +8,20 @@ export function buildBlockKitPayload({ name, total_spend, total_revenue, roas, r
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `:bar_chart: *Daily Attribution Report - BooleanMaths*\n${name} — Date: ${report_date}`,
+          text: `:bar_chart: *Daily Attribution Report - BooleanMaths*\nDate: ${report_date}`,
         },
       },
       { type: 'divider' },
       {
         type: 'section',
-        fields: [
-          { type: 'mrkdwn', text: `*:moneybag: Total Ad Spend:*\n${fmt(total_spend)}` },
-          { type: 'mrkdwn', text: `*:chart_with_upwards_trend: Total Revenue:*\n${fmt(total_revenue)}` },
-          { type: 'mrkdwn', text: `*:bar_chart: ROAS:*\n${roas.toFixed(2)}x` },
-        ],
+        text: {
+          type: 'mrkdwn',
+          text: [
+            `*:moneybag: Total Ad Spend:* ${fmt(total_spend)}`,
+            `*🛒 Total Revenue:* ${fmt(total_revenue)}`,
+            `*:chart_with_upwards_trend: ROAS:* ${roas.toFixed(2)}x`,
+          ].join('\n'),
+        },
       },
       { type: 'divider' },
       { type: 'context', elements: [{ type: 'mrkdwn', text: '_Generated automatically by BooleanMaths_' }] },

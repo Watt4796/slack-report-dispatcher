@@ -19,7 +19,7 @@ function getLogDateStrings(iso) {
   }
 }
 
-export function NotificationLogsTable() {
+export function NotificationLogsTable({ onPendingCountChange }) {
   const [logs, setLogs] = useState([]);
   const [error, setError] = useState(null);
   const [loaded, setLoaded] = useState(false);
@@ -32,6 +32,11 @@ export function NotificationLogsTable() {
   // Pagination States
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+
+  useEffect(() => {
+    const pending = logs.filter((l) => l.status === 'pending').length;
+    onPendingCountChange?.(pending);
+  }, [logs, onPendingCountChange]);
 
   useEffect(() => {
     let cancelled = false;
@@ -109,11 +114,45 @@ export function NotificationLogsTable() {
   // Active filter check
   const hasActiveFilters = Boolean(clientFilter || statusFilter || dateFilter);
 
+  const [isClearing, setIsClearing] = useState(false);
+
   const handleClearFilters = () => {
     setClientFilter('');
     setStatusFilter('');
     setDateFilter('');
     setCurrentPage(1);
+  };
+
+  const handleClearAllLogs = async () => {
+    if (!window.confirm('Are you sure you want to permanently clear all notification logs from the database?')) {
+      return;
+    }
+    try {
+      setIsClearing(true);
+      await api.clearNotifications();
+      setLogs([]);
+    } catch (err) {
+      alert(`Failed to clear logs: ${err.message}`);
+    } finally {
+      setIsClearing(false);
+    }
+  };
+
+  const [retryingIds, setRetryingIds] = useState(new Set());
+
+  const handleRetry = async (logId) => {
+    try {
+      setRetryingIds((prev) => new Set(prev).add(logId));
+      await api.retryNotification(logId);
+    } catch (err) {
+      alert(`Retry failed: ${err.message}`);
+    } finally {
+      setRetryingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(logId);
+        return next;
+      });
+    }
   };
 
   // Pagination Math
@@ -264,12 +303,21 @@ export function NotificationLogsTable() {
           )}
         </div>
 
-        {/* Results Count Badge */}
+        {/* Results Count Badge and Clear DB Button */}
         <div className="filter-results-summary">
           <span className="results-count-badge">
             {filteredLogs.length} {filteredLogs.length === 1 ? 'result' : 'results'}
             {hasActiveFilters && <span className="filtered-parenthetical"> (of {logs.length})</span>}
           </span>
+          <button
+            type="button"
+            className="btn-clear-logs"
+            onClick={handleClearAllLogs}
+            disabled={isClearing || logs.length === 0}
+            title="Permanently delete all notification logs from the database"
+          >
+            {isClearing ? 'Clearing...' : 'Clear logs'}
+          </button>
         </div>
       </div>
 
@@ -299,6 +347,7 @@ export function NotificationLogsTable() {
                 <th>Attempts</th>
                 <th>Last error</th>
                 <th>Updated</th>
+                <th>Action</th>
               </tr>
             </thead>
             <tbody>
@@ -310,7 +359,7 @@ export function NotificationLogsTable() {
                     <StatusBadge status={log.status} />
                   </td>
                   <td>
-                    <span className="attempts-pill">{log.attempts}</span>
+                    <span className="attempts-pill">{log.attempts}/3</span>
                   </td>
                   <td className="error-cell" title={log.last_error ?? ''}>
                     {log.last_error ? (
@@ -320,6 +369,25 @@ export function NotificationLogsTable() {
                     )}
                   </td>
                   <td className="mono date-cell">{formatTime(log.updated_at)}</td>
+                  <td className="action-cell">
+                    {log.status === 'pending' ? (
+                      <span className="action-pending-badge">In progress</span>
+                    ) : log.attempts >= 3 ? (
+                      <span className="attempts-max-badge" title="Maximum 3 retries reached">
+                        Max retries (3/3)
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn-table-retry"
+                        disabled={retryingIds.has(log.id)}
+                        onClick={() => handleRetry(log.id)}
+                        title={`Retry dispatching to Slack (${3 - log.attempts} retries left)`}
+                      >
+                        {retryingIds.has(log.id) ? 'Retrying...' : '↻ Retry'}
+                      </button>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

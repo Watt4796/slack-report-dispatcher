@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 const NotificationLogSchema = new mongoose.Schema(
   {
     client_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Client', required: true },
+    client_name: { type: String }, // preserves client's name even if clients are reseeded
     report_date: { type: String, required: true }, // 'YYYY-MM-DD' — a string, not a Date, to sidestep TZ drift in the key
     status: { type: String, enum: ['pending', 'sent', 'failed'], default: 'pending', index: true },
     attempts: { type: Number, default: 0 },

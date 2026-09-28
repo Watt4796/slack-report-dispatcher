@@ -66,7 +66,7 @@ async function main() {
     await slackReportsQueue.add('send-report', report, { jobId: `${report._id}-${reportDate}` });
     await NotificationLog.updateOne(
       { client_id: report._id, report_date: reportDate },
-      { $setOnInsert: { status: 'pending' } },
+      { $setOnInsert: { status: 'pending' }, $set: { client_name: report.name } },
       { upsert: true }
     );
   }

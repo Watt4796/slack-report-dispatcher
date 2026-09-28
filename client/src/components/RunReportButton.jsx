@@ -1,20 +1,38 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
 
-export function RunReportButton() {
-  const [status, setStatus] = useState('idle'); // idle | running | done | error
-  const [message, setMessage] = useState('');
+export function RunReportButton({ pendingCount = 0 }) {
+  const [isStarting, setIsStarting] = useState(false);
+  const [feedback, setFeedback] = useState(null);
+  const prevPendingRef = useRef(pendingCount);
+
+  const isDispatching = isStarting || pendingCount > 0;
+
+  useEffect(() => {
+    // When pending count drops from >0 down to 0, all reports have finished sending to Slack
+    if (prevPendingRef.current > 0 && pendingCount === 0 && !isStarting) {
+      setFeedback({ type: 'success', text: 'All reports delivered to Slack!' });
+      const timer = setTimeout(() => setFeedback(null), 4000);
+      return () => clearTimeout(timer);
+    }
+    prevPendingRef.current = pendingCount;
+  }, [pendingCount, isStarting]);
 
   async function handleClick() {
-    setStatus('running');
-    setMessage('');
+    setIsStarting(true);
+    setFeedback(null);
     try {
       const result = await api.runReportNow();
-      setStatus('done');
-      setMessage(`Enqueued ${result.enqueued} report(s) for ${result.reportDate}.`);
+      setFeedback({
+        type: 'success',
+        text: `Enqueued ${result.enqueued} report(s). Delivering 1/sec…`,
+      });
     } catch (err) {
-      setStatus('error');
-      setMessage(err.message);
+      setFeedback({ type: 'error', text: err.message });
+      const timer = setTimeout(() => setFeedback(null), 5000);
+      return () => clearTimeout(timer);
+    } finally {
+      setIsStarting(false);
     }
   }
 
@@ -23,12 +41,15 @@ export function RunReportButton() {
       <button
         className="btn-primary run-report-btn"
         onClick={handleClick}
-        disabled={status === 'running'}
+        disabled={isDispatching}
+        title={isDispatching ? 'Reports are currently being delivered to Slack' : 'Trigger a report dispatch run now'}
       >
-        {status === 'running' ? (
+        {isDispatching ? (
           <>
             <span className="spinner-icon" />
-            <span>Dispatching…</span>
+            <span>
+              {pendingCount > 0 ? `Delivering (${pendingCount} left)…` : 'Dispatching…'}
+            </span>
           </>
         ) : (
           <>
@@ -50,11 +71,11 @@ export function RunReportButton() {
           </>
         )}
       </button>
-      {message && (
-        <span className={`status-feedback ${status === 'error' ? 'feedback-error' : 'feedback-success'}`}>
-          {status === 'done' && <span className="feedback-check">✓</span>}
-          {status === 'error' && <span className="feedback-x">✕</span>}
-          {message}
+      {feedback && (
+        <span className={`status-feedback feedback-${feedback.type}`}>
+          {feedback.type === 'success' && <span className="feedback-check">✓</span>}
+          {feedback.type === 'error' && <span className="feedback-x">✕</span>}
+          {feedback.text}
         </span>
       )}
     </div>
