@@ -93,6 +93,10 @@ router.post('/:id/retry', async (req, res) => {
       await existingJob.remove();
     }
 
+    log.status = 'pending';
+    log.last_error = null;
+    await log.save();
+
     await slackReportsQueue.add(
       'send-report',
       {
@@ -106,10 +110,6 @@ router.post('/:id/retry', async (req, res) => {
       },
       { jobId }
     );
-
-    log.status = 'pending';
-    log.last_error = null;
-    await log.save();
 
     await publishNotificationEvent('report_retried');
     res.json({ ok: true, message: 'Report queued for retry', attempts: log.attempts });

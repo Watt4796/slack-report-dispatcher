@@ -31,26 +31,35 @@ async function processReport(job) {
     // (configured on the queue) handle the retry.
     await NotificationLog.updateOne(
       { client_id: report._id, report_date: report.report_date },
-      { $inc: { attempts: 1 }, status: 'failed', last_error: networkErr.message, ...(report.name && { client_name: report.name }) }
+      { $inc: { attempts: 1 }, status: 'failed', last_error: networkErr.message, ...(report.name && { client_name: report.name }) },
+      { upsert: true }
     );
     await publishNotificationEvent('report_failed');
     throw networkErr;
   }
 
   if (response.status === 429) {
-    const retryAfterSeconds = Number(response.headers['retry-after'] ?? 3);
+    const retryAfterSeconds = Number(response.headers['retry-after']) || 3;
+    console.warn(`[worker] ⚠️  Received HTTP 429 (Rate Limited) from Slack! Slack sent Retry-After: ${retryAfterSeconds}s.`);
+    console.warn(`[worker] ⏸️  Pausing queue for ${retryAfterSeconds}s. Job ${job.id} will be retried automatically without dropping data or consuming failure attempts.`);
+    await NotificationLog.updateOne(
+      { client_id: report._id, report_date: report.report_date },
+      { last_error: `Slack 429 (Rate limited — retrying in ${retryAfterSeconds}s)`, ...(report.name && { client_name: report.name }) },
+      { upsert: true }
+    );
+    await publishNotificationEvent('report_rate_limited');
     await worker.rateLimit(retryAfterSeconds * 1000);
-    // Intentionally NOT touching NotificationLog here, and this throw is intentionally outside
-    // any try/catch that would treat it as a generic failure: BullMQ recognizes this exact
-    // error internally and re-queues the job without consuming an attempt or firing 'failed'.
-    // As far as the log is concerned this job is still just "pending".
+    // Intentionally NOT incrementing attempts or marking failed: BullMQ recognizes RateLimitError
+    // internally and re-queues the job without consuming an attempt or firing 'failed'.
+    // As far as the log status is concerned this job is still just "pending".
     throw Worker.RateLimitError();
   }
 
   if (response.status >= 400) {
     await NotificationLog.updateOne(
       { client_id: report._id, report_date: report.report_date },
-      { $inc: { attempts: 1 }, status: 'failed', last_error: `Slack responded ${response.status}`, ...(report.name && { client_name: report.name }) }
+      { $inc: { attempts: 1 }, status: 'failed', last_error: `Slack responded ${response.status}`, ...(report.name && { client_name: report.name }) },
+      { upsert: true }
     );
     await publishNotificationEvent('report_failed');
     throw new Error(`Slack responded ${response.status}`);
@@ -58,7 +67,8 @@ async function processReport(job) {
 
   await NotificationLog.updateOne(
     { client_id: report._id, report_date: report.report_date },
-    { status: 'sent', sent_at: new Date(), slack_response_status: response.status, ...(report.name && { client_name: report.name }) }
+    { status: 'sent', sent_at: new Date(), slack_response_status: response.status, last_error: null, ...(report.name && { client_name: report.name }) },
+    { upsert: true }
   );
   await publishNotificationEvent('report_sent');
 }

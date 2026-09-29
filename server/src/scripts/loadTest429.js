@@ -6,9 +6,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') }); // scripts -> src -> server -> repo root
 
 import mongoose from 'mongoose';
+import axios from 'axios';
 import { connectDB } from '../config/db.js';
 import { slackReportsQueue } from '../queue/slackReportsQueue.js';
 import NotificationLog from '../models/NotificationLog.js';
+import { publishNotificationEvent } from '../events/notificationBroadcaster.js';
 
 // Phase 4: prove the 429 path end-to-end. This enqueues N synthetic jobs (not tied to the
 // 5 seeded clients — you only have 5, and this wants ~20) straight onto slack-reports, then
@@ -59,22 +61,50 @@ async function main() {
     };
   });
 
+  // Preflight check: verify API server is online and a worker is listening
+  try {
+    await axios.post(process.env.SLACK_ENDPOINT_OVERRIDE, {}, { timeout: 2000, validateStatus: () => true });
+  } catch (err) {
+    if (err.code === 'ECONNREFUSED') {
+      console.warn(`\n⚠️  WARNING: Could not connect to API server at ${process.env.SLACK_ENDPOINT_OVERRIDE}`);
+      console.warn('   The mock Slack endpoint is offline. Please make sure "npm run dev" is running!\n');
+    }
+  }
+
+  const workers = await slackReportsQueue.getWorkers().catch(() => []);
+  if (workers.length === 0) {
+    console.warn('\n⚠️  WARNING: No active worker detected on queue "slack-reports"!');
+    console.warn('   Jobs will stay pending until you start the worker in another terminal:');
+    console.warn('   👉 Run "npm run dev" (starts server + worker) or "npm run worker -w server"\n');
+  }
+
+  // Handle Ctrl+C gracefully: clean up any pending records for this run so nothing is orphaned
+  process.on('SIGINT', async () => {
+    console.log('\n\nCancelled by user. Cleaning up pending load-test jobs...');
+    await NotificationLog.deleteMany({ report_date: reportDate, status: 'pending' }).catch(() => {});
+    await mongoose.disconnect().catch(() => {});
+    process.exit(130);
+  });
+
   console.log(`Enqueuing ${JOB_COUNT} synthetic jobs against the mock endpoint...`);
   const start = Date.now();
 
   for (const report of jobs) {
-    await slackReportsQueue.add('send-report', report, { jobId: `${report._id}-${reportDate}` });
     await NotificationLog.updateOne(
       { client_id: report._id, report_date: reportDate },
       { $setOnInsert: { status: 'pending' }, $set: { client_name: report.name } },
       { upsert: true }
     );
+    await slackReportsQueue.add('send-report', report, { jobId: `${report._id}-${reportDate}` });
   }
+
+  await publishNotificationEvent('load_test_started');
 
   console.log('Enqueued. Waiting for the worker to drain the queue (Ctrl+C to stop watching)...\n');
 
   const deadline = Date.now() + 5 * 60 * 1000; // 5 min safety timeout
   let finished = false;
+  let dropped = 0;
 
   while (Date.now() < deadline) {
     const rows = await NotificationLog.find({ report_date: reportDate }).lean();
@@ -82,11 +112,11 @@ async function main() {
     const sent = rows.filter((r) => r.status === 'sent').length;
     const failed = rows.filter((r) => r.status === 'failed').length;
 
-    process.stdout.write(`\r  pending: ${pending}  sent: ${sent}  failed: ${failed}   `);
+    process.stdout.write(`\r  [Progress] Pending (processing / 429 cooldown): ${pending} | Sent: ${sent} | Failed: ${failed}   `);
 
     if (pending === 0) {
       const elapsedSec = ((Date.now() - start) / 1000).toFixed(1);
-      const dropped = JOB_COUNT - sent - failed;
+      dropped = JOB_COUNT - sent - failed;
 
       console.log(`\n\nDone in ${elapsedSec}s for ${JOB_COUNT} jobs.`);
       console.log(`  baseline at 1 job/sec: ~${JOB_COUNT}s, plus time spent paused on any Retry-After hits`);
@@ -102,7 +132,9 @@ async function main() {
     console.log('\n\nTimed out waiting for completion — is the worker running? `npm run worker -w server`');
   }
 
+  await slackReportsQueue.close().catch(() => {});
   await mongoose.disconnect();
+  process.exit(finished && dropped === 0 ? 0 : 1);
 }
 
 main().catch((err) => {

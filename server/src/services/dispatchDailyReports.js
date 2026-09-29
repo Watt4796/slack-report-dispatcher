@@ -30,12 +30,6 @@ export async function dispatchDailyReports(referenceDate = new Date()) {
       }
     }
 
-    await slackReportsQueue.add(
-      'send-report',
-      { ...report, report_date: reportDate },
-      { jobId }
-    );
-
     await NotificationLog.updateOne(
       { client_id: report._id, report_date: reportDate },
       {
@@ -47,6 +41,12 @@ export async function dispatchDailyReports(referenceDate = new Date()) {
         },
       },
       { upsert: true }
+    );
+
+    await slackReportsQueue.add(
+      'send-report',
+      { ...report, report_date: reportDate },
+      { jobId }
     );
   }
 
